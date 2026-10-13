@@ -1,0 +1,39 @@
+plugins { id 'java' }
+repositories { mavenCentral() }
+def clientJar = files('../runelite-client/build/libs/client-1.13.2-SNAPSHOT-shaded.jar')
+dependencies {
+    implementation clientJar
+    implementation 'org.ow2.asm:asm:9.7'
+    implementation 'org.ow2.asm:asm-tree:9.7'
+}
+tasks.withType(JavaCompile).configureEach { options.release.set(11) }
+tasks.register('buildReviewClient', JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ReviewClientBuilder'
+    args file('build/input/injected-client.jar'), clientJar.singleFile, file('build/review-client.jar')
+}
+tasks.register('pluginJar', Jar) {
+    dependsOn classes
+    archiveFileName = 'scaperune-review-plugin.jar'
+    from(sourceSets.main.output) { include 'com/scaperune/mirror/**' }
+}
+def reviewClasspath = files('build/review-client.jar') + sourceSets.main.output + configurations.runtimeClasspath
+['verifyClasses': 'NativeClassVerifier',
+ 'verifyPicking': 'net.runelite.client.plugins.gpu.NativePickingIntegrationTest',
+ 'verifyCamera': 'net.runelite.client.plugins.gpu.NativeCameraIntegrationTest'].each { taskName, entry ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn buildReviewClient
+        classpath = reviewClasspath
+        mainClass = entry
+        jvmArgs '-Xverify:all'
+        if (taskName == 'verifyCamera') args file('build/input/injected-client.jar')
+    }
+}
+tasks.register('runReviewClient', JavaExec) {
+    dependsOn buildReviewClient, pluginJar
+    classpath = files('build/review-client.jar', tasks.pluginJar.archiveFile)
+    mainClass = 'com.scaperune.mirror.ScapeRuneLauncher'
+    jvmArgs '-ea'
+    args '--developer-mode', '--disable-telemetry', '--profile', 'ScapeRune Review'
+}

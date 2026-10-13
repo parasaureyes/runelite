@@ -1,0 +1,10 @@
+gradle.projectsEvaluated {
+    def client = gradle.rootProject.findProject(':client')
+    if (client == null) return
+    client.tasks.register('copyReviewInjectedClient', Copy) {
+        from(provider { client.configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts
+            .find { it.moduleVersion.id.group == 'net.runelite' && it.name == 'injected-client' }.file })
+        into(new File(gradle.rootProject.projectDir, 'review-support/build/input'))
+        rename { 'injected-client.jar' }
+    }
+}
